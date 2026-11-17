@@ -1,79 +1,121 @@
-// The screenshot scenes behind ?shot=start|play|end. Each one plays the real rules forward from a
-// fresh world for a fixed number of steps, steered by a simple autopilot (look ahead each way the
-// paddle could move, keep clear of blocks, chase the lowest coin when that is safe), so the frame
-// is what a short game really looks like and the same seed always gives the same frame.
-import { FIELD, PLAYER, STEP } from './config.js';
-import { EVENT_OVER, KIND_BLOCK } from './world.js';
-import { SCREEN_OVER, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
-
-const START_SECONDS = 5;
-const PLAY_SECONDS = 26;
-const END_LIMIT_SECONDS = 600;
-/**
- * How far ahead, in seconds, the autopilot checks each way it could move: the play scene's pilot
- * looks well ahead and keeps all its lives; the end scene's looks only a moment ahead, so it is
- * caught out once the blocks speed up, as a hurried player is.
- */
-const HORIZON_PLAY = 0.7;
-const HORIZON_END = 0.25;
-const SAMPLE = 1 / 30;
-const DIRECTIONS = [0, -1, 1];
-/** Extra room, each side, it keeps between the paddle and a block. */
-const MARGIN = 10;
-
-/** Seconds until moving in `direction` (-1, 0, 1) runs the paddle into a block; Infinity when it never does. */
-function timeToHit(state, direction, horizon) {
-  const player = state.player;
-  for (let t = SAMPLE; t <= horizon; t += SAMPLE) {
-    const x = Math.min(FIELD.width - player.width, Math.max(0, player.x + direction * PLAYER.speed * t));
-    for (let index = 0; index < state.items.length; index += 1) {
-      const item = state.items[index];
-      if (!item.active || item.kind !== KIND_BLOCK) continue;
-      const y = item.y + item.speed * t;
-      if (y + item.height > player.y && y < player.y + player.height && item.x < x + player.width + MARGIN && item.x + item.width > x - MARGIN) return t;
-    }
-  }
-  return Infinity;
-}
-
-/** Of the safe ways to move, the one toward the lowest coin (or the centre); else the one that is hit last. */
-function autopilot(state, horizon) {
-  const player = state.player;
-  let coin = null;
-  for (let index = 0; index < state.items.length; index += 1) {
-    const item = state.items[index];
-    if (item.active && item.kind !== KIND_BLOCK && (coin === null || item.y > coin.y)) coin = item;
-  }
-  const target = coin === null ? FIELD.width / 2 : coin.x + coin.width / 2;
-  const centre = player.x + player.width / 2;
-  const wanted = target > centre + 8 ? 1 : target < centre - 8 ? -1 : 0;
-  let best = wanted;
-  let bestTime = timeToHit(state, wanted, horizon);
-  for (let index = 0; index < DIRECTIONS.length && bestTime !== Infinity; index += 1) {
-    const time = timeToHit(state, DIRECTIONS[index], horizon);
-    if (time > bestTime) {
-      bestTime = time;
-      best = DIRECTIONS[index];
-    }
-  }
-  return best;
-}
+// The screenshot scenes behind ?shot=start|play|end (with &seed=N). Each scene places the
+// player, the cars and the camera by hand on real streets of the generated city and freezes
+// the clock, so the frame is exactly what the game itself renders and the same seed always
+// gives the same frame. Nothing here draws; it only arranges state for render.js.
+import { CAMERA, GRID } from './config.js';
+import { createCar } from './player.js';
+import { SCREEN_PLAY, SCREEN_TITLE } from './render.js';
 
 /**
- * Set `world` to the named scene (start, play or end; any other name is start) and return the
- * screen to draw over it and the best score to show.
+ * Arrange `state` as the named scene and return the screen to draw over it.
+ * Unknown names stage the start scene.
  */
-export function stageShot(name, world) {
-  world.reset();
-  if (name !== 'play' && name !== 'end') {
-    for (let index = 0; index < START_SECONDS / STEP; index += 1) world.step(STEP, 0, true);
-    return { screen: SCREEN_TITLE, best: 0 };
+export function stageShot(name, state) {
+  const { world, player } = state;
+  state.time = 10; // A fixed clock: water, palm sway and the title prompt all freeze mid-beat.
+  state.tint = null;
+  const vRoads = world.roads.vertical;
+  const hRoads = world.roads.horizontal;
+
+  if (name === 'play') {
+    // Mid-drive up Sunfall Boulevard (the avenue at column 4) through Downtown, in the
+    // northbound lane, traffic parked along the kerbs and two cars on the road ahead.
+    const avenue = vRoads[4].x + GRID.laneOff;
+    const y = hRoads[3].y - 150;
+    const car = state.cars[0];
+    car.x = avenue;
+    car.y = y;
+    car.angle = -Math.PI / 2;
+    car.vx = 0;
+    car.vy = -215;
+    car.forwardSpeed = 215;
+    player.mode = 'car';
+    player.car = car;
+    car.occupied = true;
+    player.x = car.x;
+    player.y = car.y;
+    player.angle = car.angle;
+    player.vx = 0;
+    player.vy = -215;
+    state.cars.push(createCar({ typeId: 'sedan', color: '#8c2f39', x: avenue, y: y - 330, angle: -Math.PI / 2 }));
+    state.cars.push(createCar({ typeId: 'taxi', color: '#ffb81c', x: vRoads[4].x - GRID.laneOff, y: y - 120, angle: Math.PI / 2 }));
+    state.cars.push(createCar({ typeId: 'hatch', color: '#64b6e8', x: vRoads[5].x - GRID.roadW / 2 + 16, y: y + 90, angle: -Math.PI / 2 }));
+    state.camera.x = car.x;
+    state.camera.y = car.y + 60;
+    state.camera.zoom = 1;
+    state.screen = SCREEN_PLAY;
+    return SCREEN_PLAY;
   }
-  const limit = name === 'end' ? END_LIMIT_SECONDS : PLAY_SECONDS;
-  const horizon = name === 'end' ? HORIZON_END : HORIZON_PLAY;
-  for (let index = 0; index < limit / STEP; index += 1) {
-    if (world.step(STEP, autopilot(world.state, horizon), false) & EVENT_OVER) break;
+
+  if (name === 'chase') {
+    // Three stars on Sunfall Boulevard: Marlo's coupe at full tilt northbound, two
+    // Harbor PD cruisers right behind him with their light bars lit, traffic scattering.
+    const avenue = vRoads[4].x + GRID.laneOff;
+    const y = hRoads[3].y - 170;
+    const car = state.cars[0];
+    car.x = avenue;
+    car.y = y;
+    car.angle = -Math.PI / 2;
+    car.vx = 0;
+    car.vy = -262;
+    car.forwardSpeed = 262;
+    player.mode = 'car';
+    player.car = car;
+    car.occupied = true;
+    player.x = car.x;
+    player.y = car.y;
+    player.angle = car.angle;
+    player.vx = 0;
+    player.vy = -262;
+    if (state.police) {
+      state.police.setHeat(300); // Three stars, held for the frame.
+      const lead = state.police.stageUnit(state, avenue, y + 128, -Math.PI / 2);
+      if (lead) { lead.car.lightPhase = 0.12; lead.car.lightsOn = true; lead.speed = 250; }
+      const second = state.police.stageUnit(state, vRoads[4].x - GRID.laneOff + 8, y + 235, -Math.PI / 2);
+      if (second) { second.car.lightPhase = 0.62; second.car.lightsOn = true; second.speed = 238; }
+    }
+    state.cars.push(createCar({ typeId: 'sedan', color: '#8c2f39', x: avenue, y: y - 350, angle: -Math.PI / 2 }));
+    state.cars.push(createCar({ typeId: 'taxi', color: '#ffb81c', x: vRoads[4].x - GRID.laneOff, y: y - 150, angle: Math.PI / 2 }));
+    state.camera.x = car.x;
+    state.camera.y = car.y + 74;
+    state.camera.zoom = 1;
+    state.screen = SCREEN_PLAY;
+    return SCREEN_PLAY;
   }
-  const over = world.state.lives === 0;
-  return { screen: over ? SCREEN_OVER : SCREEN_PLAY, best: world.state.score };
+
+  if (name === 'end') {
+    // Golden hour at Palm Court: Marlo out of the coupe, looking out over the beach at the
+    // end of the day — the run is over, the city is quiet.
+    state.tint = 'dusk';
+    const car = state.cars[0];
+    car.x = world.playerSpawn.x + 92;
+    car.y = hRoads[GRID.rows].y + GRID.laneOff;
+    car.angle = 0;
+    car.vx = 0;
+    car.vy = 0;
+    player.mode = 'foot';
+    player.car = null;
+    car.occupied = false;
+    player.x = world.playerSpawn.x + 40;
+    player.y = world.playerSpawn.y + 6;
+    player.angle = Math.PI / 2;
+    player.vx = 0;
+    player.vy = 0;
+    state.camera.x = player.x + 30;
+    state.camera.y = player.y + 26;
+    state.camera.zoom = 0.85;
+    state.screen = SCREEN_PLAY;
+    return SCREEN_PLAY;
+  }
+
+  // start: the title screen over a slow vista of the marina and the bay.
+  player.mode = 'foot';
+  player.x = world.playerSpawn.x;
+  player.y = world.playerSpawn.y;
+  player.angle = -Math.PI / 2;
+  state.camera.x = world.width * 0.66;
+  state.camera.y = world.cityHeight - 430;
+  state.camera.zoom = CAMERA.titleZoom;
+  state.screen = SCREEN_TITLE;
+  return SCREEN_TITLE;
 }
