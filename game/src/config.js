@@ -149,12 +149,12 @@ export const SHOP_NAMES = {
  * `turn` is the steering rate at full lock. `colors` is the paint palette for the type.
  */
 export const VEHICLE_TYPES = [
-  { id: 'coupe', name: 'Solstice Coupe', length: 48, width: 24, topSpeed: 355, accel: 305, grip: 9.5, turn: 3.1, colors: ['#12b5a5', '#ff6b4a', '#ffc93c', '#e8e4da', '#3f7fbf'] },
-  { id: 'sedan', name: 'Harbor Sedan', length: 54, width: 25, topSpeed: 305, accel: 240, grip: 9, turn: 2.7, colors: ['#c8ccd2', '#5b6b7c', '#8c2f39', '#2e4053', '#d9d4c5'] },
+  { id: 'coupe', name: 'Solstice Coupe', length: 48, width: 24, topSpeed: 355, accel: 305, grip: 9.5, turn: 3.1, colors: ['#12b5a5', '#ff6b4a', '#ffc93c', '#e8e4da', '#3f7fbf', '#8e6cc8', '#e04f7a'] },
+  { id: 'sedan', name: 'Harbor Sedan', length: 54, width: 25, topSpeed: 305, accel: 240, grip: 9, turn: 2.7, colors: ['#c8ccd2', '#5b6b7c', '#8c2f39', '#2e4053', '#d9d4c5', '#7a4a2b', '#4a6741'] },
   { id: 'taxi', name: 'SunCab Taxi', length: 52, width: 25, topSpeed: 295, accel: 235, grip: 9, turn: 2.7, colors: ['#ffb81c'] },
-  { id: 'hatch', name: 'Brisa Hatch', length: 42, width: 23, topSpeed: 275, accel: 225, grip: 9.5, turn: 3.2, colors: ['#7ec850', '#ff8fab', '#64b6e8', '#f2f0e6', '#ffa94d'] },
-  { id: 'pickup', name: 'Dune Runner Pickup', length: 56, width: 27, topSpeed: 285, accel: 230, grip: 8, turn: 2.5, colors: ['#b8574a', '#707a68', '#3e5c50', '#c8b28a'] },
-  { id: 'van', name: 'Portside Van', length: 58, width: 28, topSpeed: 250, accel: 195, grip: 8, turn: 2.3, colors: ['#e8e6df', '#9db4c0', '#d9a441', '#77878f'] },
+  { id: 'hatch', name: 'Brisa Hatch', length: 42, width: 23, topSpeed: 275, accel: 225, grip: 9.5, turn: 3.2, colors: ['#7ec850', '#ff8fab', '#64b6e8', '#f2f0e6', '#ffa94d', '#c0c6ce', '#5e548e'] },
+  { id: 'pickup', name: 'Dune Runner Pickup', length: 56, width: 27, topSpeed: 285, accel: 230, grip: 8, turn: 2.5, colors: ['#b8574a', '#707a68', '#3e5c50', '#c8b28a', '#2f6db3', '#946b3a'] },
+  { id: 'van', name: 'Portside Van', length: 58, width: 28, topSpeed: 250, accel: 195, grip: 8, turn: 2.3, colors: ['#e8e6df', '#9db4c0', '#d9a441', '#77878f', '#7fb069', '#b56576'] },
   { id: 'cruiser', name: 'Harbor PD Cruiser', length: 56, width: 26, topSpeed: 338, accel: 275, grip: 9, turn: 2.9, colors: ['#eef1f4'] },
 ];
 
@@ -175,6 +175,9 @@ export const PLAYER = {
   hair: '#2b2118',
   pants: '#31435c',
 };
+
+/** Ambient city life: how many AI-driven cars and pedestrians are kept around the player. */
+export const AMBIENT = { trafficCars: 20, pedestrians: 34 };
 
 /** Shared car-handling numbers not tied to one vehicle type. */
 export const CAR_TUNING = {

@@ -9,6 +9,7 @@
 // Health reaching zero is WASTED: a hospital fee, a cleared wanted level, and Marlo
 // wakes up outside Sunfall General.
 import { emitCrime } from './traffic.js';
+import { spawnFlash, spawnSparks } from './particles.js';
 
 const FIRE_INTERVAL = 0.145; // Seconds between pistol shots while the trigger is held.
 const RANGE = 540;
@@ -114,14 +115,44 @@ export function createCombat(world, traffic, pedestrians, police, rng) {
       const rx = car.x - player.x;
       const ry = car.y - player.y;
       const along = rx * ux + ry * uy;
-      if (along < 8 || along > endT + car.length / 2) continue;
-      const cos = Math.cos(-car.angle);
-      const sin = Math.sin(-car.angle);
-      const lx = rx * cos - ry * sin;
-      const ly = rx * sin + ry * cos;
-      if (Math.abs(lx) < car.length / 2 + 4 && Math.abs(ly) < car.width / 2 + 4) {
-        if (along < endT + car.length / 2) { hitCar = car; hitPed = null; endT = Math.max(10, along - car.length / 2); }
+      const hx = car.length / 2 + 4;
+      const hy = car.width / 2 + 4;
+      // Skip only cars that cannot possibly be the nearest hit: centre behind the
+      // muzzle, or even the box's nearest corner (a half-diagonal away) past endT.
+      if (along < 8 || along - Math.hypot(hx, hy) > endT) continue;
+      // Ray against the car's oriented box, worked in the car's own frame: take the
+      // ray's origin (relative to the car centre) and its direction into that frame,
+      // then a slab test per axis gives the distance where the shot first reaches
+      // the body. (The old test rotated the centre vector itself into this frame and
+      // compared it with the half extents, which only passed when the centre sat
+      // within about a half-length of the player, so cars were unhittable at range.)
+      const cos = Math.cos(car.angle);
+      const sin = Math.sin(car.angle);
+      const ox = -rx * cos - ry * sin;
+      const oy = rx * sin - ry * cos;
+      const dx = ux * cos + uy * sin;
+      const dy = -ux * sin + uy * cos;
+      let tEnter = -Infinity;
+      let tExit = Infinity;
+      if (Math.abs(dx) < 1e-9) {
+        if (Math.abs(ox) > hx) continue;
+      } else {
+        const t1 = (-hx - ox) / dx;
+        const t2 = (hx - ox) / dx;
+        tEnter = Math.max(tEnter, Math.min(t1, t2));
+        tExit = Math.min(tExit, Math.max(t1, t2));
       }
+      if (Math.abs(dy) < 1e-9) {
+        if (Math.abs(oy) > hy) continue;
+      } else {
+        const t1 = (-hy - oy) / dy;
+        const t2 = (hy - oy) / dy;
+        tEnter = Math.max(tEnter, Math.min(t1, t2));
+        tExit = Math.min(tExit, Math.max(t1, t2));
+      }
+      if (tEnter > tExit || tExit < 0) continue;
+      const tHit = Math.max(0, tEnter);
+      if (tHit < endT) { hitCar = car; hitPed = null; endT = Math.max(10, tHit); }
     }
 
     const endX = player.x + ux * endT;
@@ -129,6 +160,9 @@ export function createCombat(world, traffic, pedestrians, police, rng) {
     effects.push({ kind: 'tracer', x1: player.x + ux * 14, y1: player.y + uy * 14, x2: endX, y2: endY, t: 0.07, max: 0.07 });
     effects.push({ kind: 'flash', x: player.x + ux * 16, y: player.y + uy * 16, t: 0.05, max: 0.05 });
     effects.push({ kind: 'sparks', x: endX, y: endY, t: 0.16, max: 0.16 });
+    // The world-space layer gets its own glow at the muzzle and sparks at the impact.
+    spawnFlash(player.x + ux * 16, player.y + uy * 16);
+    spawnSparks(endX, endY, 5);
 
     if (hitPed) {
       hitPed.mode = 'down';

@@ -1,5 +1,7 @@
-// Capture the game's screenshots for the entry: serve game/ locally, render each
-// scene named in shots.json in headless Chromium, and save JPEGs under screenshots/.
+// Capture the game's screenshots for the entry: serve the repo locally, render each
+// scene named in shots.json in headless Chromium via the staging harness
+// (tools/stage.html, which boots the game's own modules and stages the scene through
+// the game's own state hooks), and save JPEGs under screenshots/.
 // Run from the repo root: node tools/capture-shots.mjs
 import { createServer } from 'node:http';
 import { execFileSync, spawn } from 'node:child_process';
@@ -9,13 +11,15 @@ import { extname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const root = fileURLToPath(new URL('..', import.meta.url));
-const gameDir = join(root, 'game');
 const shotsDir = join(root, 'screenshots');
 const CHROME = join(process.env.HOME, '.cache/ms-playwright/chromium_headless_shell-1243/chrome-headless-shell-linux64/chrome-headless-shell');
 // The Playwright ffmpeg build (~/.cache/ms-playwright/ffmpeg-1011/ffmpeg-linux) has no
 // PNG decoder and cannot read the screenshots, so conversion uses the system ffmpeg.
 const FFMPEG = '/usr/bin/ffmpeg';
 const MAX_BYTES = 250 * 1024;
+
+// The previous screenshot set, replaced by the scenes in shots.json.
+const OLD_SHOTS = ['1-start.jpg', '2-play.jpg', '3-chase.jpg', '4-end.jpg'];
 
 const MIME = {
   '.html': 'text/html; charset=utf-8',
@@ -28,10 +32,12 @@ const MIME = {
   '.svg': 'image/svg+xml',
 };
 
+// Serve the repo root: the staging page lives in tools/ and imports the game's modules
+// from game/src/, so both trees must be reachable from one origin.
 const server = createServer((req, res) => {
   const path = decodeURIComponent(new URL(req.url, 'http://x').pathname);
-  const file = join(gameDir, path === '/' ? 'index.html' : path);
-  if (!file.startsWith(gameDir) || !existsSync(file)) { res.writeHead(404); res.end(); return; }
+  const file = join(root, path === '/' ? 'tools/stage.html' : path.replace(/^\/+/, ''));
+  if (!file.startsWith(root) || !existsSync(file)) { res.writeHead(404); res.end(); return; }
   res.writeHead(200, { 'content-type': MIME[extname(file)] ?? 'application/octet-stream' });
   res.end(readFileSync(file));
 });
@@ -39,11 +45,13 @@ const server = createServer((req, res) => {
 await new Promise((r) => server.listen(0, '127.0.0.1', r));
 const port = server.address().port;
 
+for (const old of OLD_SHOTS) rmSync(join(shotsDir, old), { force: true });
+
 const shots = JSON.parse(readFileSync(join(root, 'shots.json'), 'utf8'));
 try {
   for (const shot of shots) {
     const png = join(tmpdir(), `neon-palms-${shot.name}.png`);
-    const url = `http://127.0.0.1:${port}/index.html${shot.query}`;
+    const url = `http://127.0.0.1:${port}/tools/stage.html${shot.query}`;
     const chromeArgs = [
       '--headless', '--disable-gpu', '--no-sandbox', '--hide-scrollbars',
       '--window-size=1280,720', '--virtual-time-budget=8000',
@@ -76,9 +84,6 @@ try {
 } finally {
   server.close();
 }
-
-// The kit's old third screenshot is not in the new list; remove it.
-rmSync(join(shotsDir, '3-end.jpg'), { force: true });
 
 console.log('screenshots/ now holds:');
 for (const shot of shots) {

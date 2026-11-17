@@ -4,17 +4,16 @@
 // When the player steals a car that still has its driver, this module spots it in the
 // vehicle registry, raises the 'theft' crime and makes the driver bail out and flee.
 // Drawing mirrors player.js's little figure, recoloured per person.
-import { GRID } from './config.js';
+import { AMBIENT, GRID } from './config.js';
 import { roundRectPath, shadeColor } from './player.js';
 import { emitCrime, onCrime } from './traffic.js';
 
-const TARGET_PEDS = 24;
 const RIM_INSET = 9; // Sidewalk line inside the block edge that pedestrians walk.
 const SPAWN_RANGE = 780;
 const RELOCATE_DIST = 1150;
 const PED_RADIUS = 9;
 
-const SHIRTS = ['#e4572e', '#f2f0e6', '#3f7fbf', '#ffc93c', '#7ec850', '#ff8fab', '#8e6cc8', '#12b5a5', '#c8ccd2', '#e88ca0'];
+const SHIRTS = ['#e4572e', '#f2f0e6', '#3f7fbf', '#ffc93c', '#7ec850', '#ff8fab', '#8e6cc8', '#12b5a5', '#c8ccd2', '#e88ca0', '#ef8354', '#43aa8b', '#9b5de5'];
 const PANTS = ['#31435c', '#5b4636', '#2e4053', '#707a68', '#8c2f39', '#3e5c50'];
 const SKINS = ['#e8b08a', '#c68863', '#8d5a3b', '#f2c9a4', '#6e4525'];
 const HAIRS = ['#2b2118', '#4a3220', '#101010', '#8a6d3b', '#b8b0a4', '#7a2e2e'];
@@ -163,7 +162,7 @@ export function createPedestrians(world, traffic, rng) {
     const focus = state.player;
 
     // Keep the crowd gathered around the player.
-    while (list.length < TARGET_PEDS) {
+    while (list.length < AMBIENT.pedestrians) {
       const ped = makePed();
       if (!placeOnRim(ped, focus)) break;
       list.push(ped);
@@ -254,7 +253,7 @@ export function createPedestrians(world, traffic, rng) {
     // Bailed drivers leave the crowd once they have run their panic out (list hygiene:
     // fleeing extras beyond the target count are dropped when calm and far away).
     for (let i = list.length - 1; i >= 0; i -= 1) {
-      if (list.length <= TARGET_PEDS) break;
+      if (list.length <= AMBIENT.pedestrians) break;
       const ped = list[i];
       if (ped.mode === 'rim' && Math.hypot(ped.x - focus.x, ped.y - focus.y) > 500) list.splice(i, 1);
     }

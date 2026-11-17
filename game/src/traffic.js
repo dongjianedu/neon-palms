@@ -6,8 +6,9 @@
 // system will subscribe to react. Stealing a driven car is noticed by pedestrians.js,
 // which watches the registry for a car that gained the player while still flagged with a
 // driver, and makes that driver bail out.
-import { VEHICLE_TYPES } from './config.js';
+import { AMBIENT, VEHICLE_TYPES } from './config.js';
 import { createCar } from './player.js';
+import { spawnSmoke, spawnSparks } from './particles.js';
 
 // --- Crime events ---------------------------------------------------------------------
 // onCrime(type, handler) subscribes; emitCrime(type, x, y, data) notifies. Handlers run
@@ -33,7 +34,6 @@ export function emitCrime(type, x, y, data = {}) {
 }
 
 // --- Tuning -----------------------------------------------------------------------------
-const TARGET_TRAFFIC = 13; // AI cars kept alive around the player.
 const SPAWN_MIN = 420; // Never materialise a car this close to the player…
 const SPAWN_MAX = 1050; // …or farther than this.
 const DESPAWN_DIST = 1300;
@@ -41,6 +41,17 @@ const FOLLOW_GAP = 30; // Extra clear road an AI car wants ahead of its nose.
 
 function laneLength(lane) {
   return Math.hypot(lane.x2 - lane.x1, lane.y2 - lane.y1);
+}
+
+/** One smoke puff at each rear tyre of a car that is braking hard. */
+function rearTyreSmoke(car) {
+  const fx = Math.cos(car.angle);
+  const fy = Math.sin(car.angle);
+  const bx = car.x - fx * car.length * 0.31;
+  const by = car.y - fy * car.length * 0.31;
+  const off = car.width * 0.36;
+  spawnSmoke(bx - fy * off, by + fx * off, 1);
+  spawnSmoke(bx + fy * off, by - fx * off, 1);
 }
 
 function key(x, y) {
@@ -152,6 +163,20 @@ export function createTraffic(world, rng) {
     entry.speed += Math.max(-accel * dt, Math.min(accel * dt, target - entry.speed));
     car.braking = entry.speed < prev - 4;
 
+    // Hard braking at speed smokes the rear tyres, throttled per driver; a stop
+    // demanded from real speed (something stepped into the lane) throws sparks off
+    // the nose once, until the car is rolling slowly again.
+    entry.smokeT = (entry.smokeT ?? 0) - dt;
+    if (car.braking && entry.speed > 85 && entry.smokeT <= 0) {
+      entry.smokeT = 0.09;
+      rearTyreSmoke(car);
+    }
+    if (target === 0 && prev > 130 && !entry.sparked) {
+      entry.sparked = true;
+      spawnSparks(car.x + lane.dirX * car.length / 2, car.y + lane.dirY * car.length / 2, 4);
+    }
+    if (entry.speed < 40) entry.sparked = false;
+
     entry.t += entry.speed * dt;
     if (entry.t >= len) {
       // Intersection: continue onto a lane that starts where this one ends.
@@ -189,10 +214,19 @@ export function createTraffic(world, rng) {
     for (let i = drivers.length - 1; i >= 0; i -= 1) {
       if (drivers[i].car.occupied) drivers.splice(i, 1);
     }
-    while (drivers.length < TARGET_TRAFFIC) {
+    while (drivers.length < AMBIENT.trafficCars) {
       const before = drivers.length;
       spawnDriver(focus);
       if (drivers.length === before) break; // No legal spawn point this step; retry next.
+    }
+    // The car Marlo is driving smokes its rear tyres under hard braking too.
+    const driven = state.player.mode === 'car' ? state.player.car : null;
+    if (driven) {
+      driven.smokeT = (driven.smokeT ?? 0) - dt;
+      if (driven.braking && Math.abs(driven.forwardSpeed ?? 0) > 85 && driven.smokeT <= 0) {
+        driven.smokeT = 0.09;
+        rearTyreSmoke(driven);
+      }
     }
     for (let i = drivers.length - 1; i >= 0; i -= 1) {
       const entry = drivers[i];

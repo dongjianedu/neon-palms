@@ -80,6 +80,9 @@ export function createCar(spec) {
     forwardSpeed: 0,
     braking: false,
     occupied: false,
+    // Cabin silhouette variant (0 sedan, 1 hatch, 2 coupe), fixed for the car's life
+    // by a hash of where it first stood, so the same car never changes shape.
+    variant: Math.abs(Math.round((spec.x ?? 0) * 7 + (spec.y ?? 0) * 13)) % 3,
   };
 }
 
@@ -308,16 +311,20 @@ export function drawCar(ctx, car) {
     ctx.fillStyle = shadeColor(car.color, 0.72);
     ctx.fillRect(-L / 2 + 4, -W / 2 + 4, L * 0.34, W - 8);
   }
-  // Cabin glass, windshield and rear window.
+  // Cabin glass, windshield and rear window. The cabin's placement and length vary
+  // with car.variant: the sedan keeps the standard glasshouse, the hatch runs its
+  // glass long toward the tail, the coupe wears a shorter cabin set further back.
+  const glassX = -L * 0.1 + (car.variant === 2 ? -L * 0.05 : car.variant === 1 ? -L * 0.03 : 0);
+  const glassLen = L * 0.36 * (car.variant === 1 ? 1.18 : car.variant === 2 ? 0.82 : 1);
   ctx.fillStyle = '#22303c';
-  roundRectPath(ctx, -L * 0.1, -W * 0.37, L * 0.36, W * 0.74, 4);
+  roundRectPath(ctx, glassX, -W * 0.37, glassLen, W * 0.74, 4);
   ctx.fill();
   ctx.fillStyle = 'rgba(150,200,225,0.75)';
-  ctx.fillRect(L * 0.17, -W * 0.33, L * 0.07, W * 0.66);
-  ctx.fillRect(-L * 0.13, -W * 0.33, L * 0.05, W * 0.66);
+  ctx.fillRect(glassX + glassLen - L * 0.09, -W * 0.33, L * 0.07, W * 0.66);
+  ctx.fillRect(glassX - L * 0.03, -W * 0.33, L * 0.05, W * 0.66);
   // Roof panel between the glass.
   ctx.fillStyle = shadeColor(car.color, 1.16);
-  roundRectPath(ctx, -L * 0.05, -W * 0.3, L * 0.17, W * 0.6, 3);
+  roundRectPath(ctx, glassX + L * 0.05, -W * 0.3, glassLen * 0.47, W * 0.6, 3);
   ctx.fill();
 
   // Harbor PD livery: black door band, PD marks and a light bar whose red and blue

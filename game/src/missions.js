@@ -10,6 +10,7 @@
 // after the story ends. This module owns the progress record (story index, respect,
 // fares, deliveries) that save.js persists; it never touches storage itself.
 import { createCar } from './player.js';
+import { spawnSparkle } from './particles.js';
 
 /** How close Marlo must be to a start marker for its prompt (and E) to count. */
 const MARKER_RANGE = 88;
@@ -231,6 +232,7 @@ export function createMissions(world, traffic, police, rng, hooks = {}) {
     }
     if (active.kind !== 'story') progress.respect += 1;
     player.cash += payout;
+    spawnSparkle(player.x, player.y, 12); // Money landing gets a little gold weather.
     banner(state, active.kind === 'story' ? 'MISSION COMPLETE' : 'JOB DONE',
       `${active.title} — $${payout}${note}`);
     state.pendingAnnounce = `${active.title} complete — $${payout}.`;

@@ -21,6 +21,7 @@ import { createHud } from './hud.js';
 import { createAudio } from './audio.js';
 import { applySaveData, buildSaveData, createSaveStore } from './save.js';
 import { createRenderer, SCREEN_PAUSED, SCREEN_PLAY, SCREEN_TITLE } from './render.js';
+import { drawParticles, updateParticles } from './particles.js';
 import { stageShot } from './shots.js';
 
 /** The longest frame the loop catches up on; a longer stall (a hidden tab) is dropped. */
@@ -85,12 +86,30 @@ const state = {
   inputRef: null,
 };
 
+/**
+ * Paint the particle pool in the world layer: the same camera transform the renderer
+ * just used, reapplied over its finished frame, so sparks and smoke sit in the world
+ * (over the entities, under the HUD) rather than floating with the screen.
+ */
+function drawWorldParticles() {
+  const cam = state.camera;
+  const { w, h } = renderer.size();
+  const ctx = renderer.ctx;
+  ctx.save();
+  ctx.translate(w / 2, h / 2);
+  ctx.scale(cam.zoom, cam.zoom);
+  ctx.translate(-cam.x, -cam.y);
+  drawParticles(ctx);
+  ctx.restore();
+}
+
 function runShot(name) {
   state.viewport = renderer.size();
   const screen = stageShot(name, state);
   let painted = 0;
   function paint() {
     renderer.draw(state);
+    drawWorldParticles();
     if (screen === SCREEN_PLAY) {
       hud.draw(renderer.ctx, state);
       combat.drawScreen(renderer.ctx, state);
@@ -212,6 +231,7 @@ function runGame() {
     police.update(state, STEP);
     combat.update(state, input, STEP);
     missions.update(state, input, STEP);
+    updateParticles(STEP);
     if (state.pendingAnnounce) {
       announce(state.pendingAnnounce);
       if (state.pendingAnnounce.startsWith('BUSTED') || state.pendingAnnounce.startsWith('WASTED')) {
@@ -248,6 +268,7 @@ function runGame() {
     }
     state.viewport = renderer.size();
     renderer.draw(state);
+    drawWorldParticles();
     if (state.screen === SCREEN_PLAY) {
       hud.draw(renderer.ctx, state);
       combat.drawScreen(renderer.ctx, state);

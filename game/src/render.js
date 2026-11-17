@@ -217,6 +217,24 @@ export function createRenderer(canvas) {
       ctx.fillStyle = 'rgba(255,255,255,0.65)';
       for (let x = b.x + 4; x < b.x + b.w - 6; x += 12) ctx.fillRect(x, b.y + b.h - 9, 5, 9);
     }
+    if (b.district === 'downtown') {
+      // Neon sign strips along the south roofline of some towers, in the title's
+      // pink / cyan / amber. Count, colour and placement all come from the building's
+      // hash, so a sign never flickers or moves between frames.
+      const neon = ['#ff5da2', '#22d3ee', '#ffc93c'];
+      const signs = Math.floor(hash2(b.seed, 31) * 3);
+      for (let n = 0; n < signs; n += 1) {
+        const color = neon[Math.floor(hash2(b.seed, 40 + n) * neon.length) % neon.length];
+        const sw = 9 + hash2(b.seed, 50 + n) * 15;
+        const sx = b.x + 5 + hash2(b.seed, 60 + n) * Math.max(4, b.w - 10 - sw);
+        ctx.save();
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 8;
+        ctx.fillStyle = color;
+        ctx.fillRect(sx, b.y + b.h - 4.5, sw, 2.6);
+        ctx.restore();
+      }
+    }
 
     if (b.name) {
       ctx.font = `700 11px ${FONT}`;
